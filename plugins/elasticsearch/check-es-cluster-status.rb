@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
 #
-# Checks ElasticSearch cluster status
+# Checks ElasticSearch file descriptor status
 # ===
 #
 # DESCRIPTION:
-#   This plugin checks the ElasticSearch cluster status, using its API.
+#   This plugin checks the ElasticSearch file descriptor usage, using its API.
 #
 # OUTPUT:
 #   plain-text
@@ -16,7 +16,7 @@
 #   sensu-plugin Ruby gem
 #   rest-client Ruby gem
 #
-# Copyright 2012 Sonian, Inc <chefs@sonian.net>
+# Author: S. Zachariah Sprackett <zac@sprackett.com>
 #
 # Released under the same terms as Sensu (the MIT license); see LICENSE
 # for details.
@@ -27,10 +27,34 @@ require 'rest-client'
 require 'json'
 
 class ESClusterStatus < Sensu::Plugin::Check::CLI
+  option :host,
+    :description => 'Elasticsearch host',
+    :short => '-h HOST',
+    :long => '--host HOST',
+    :default => 'localhost'
+
+  option :port,
+    :description => 'Elasticsearch port',
+    :short => '-p PORT',
+    :long => '--host PORT',
+    :proc => proc {|a| a.to_i },
+    :default => 9200
+
+  option :critical,
+    :description => 'Critical percentage of FD usage',
+    :short       => '-c PERCENTAGE',
+    :proc        => proc { |a| a.to_i },
+    :default     => 90
+
+  option :warning,
+    :description => 'Warning percentage of FD usage',
+    :short       => '-w PERCENTAGE',
+    :proc        => proc { |a| a.to_i },
+    :default     => 80
 
   def get_es_resource(resource)
     begin
-      r = RestClient::Resource.new("http://localhost:9200/#{resource}", :timeout => 45)
+      r = RestClient::Resource.new("http://#{config[:host]}:#{config[:port]}/#{resource}", :timeout => 45)
       JSON.parse(r.get)
     rescue Errno::ECONNREFUSED
       warning 'Connection refused'
@@ -39,30 +63,37 @@ class ESClusterStatus < Sensu::Plugin::Check::CLI
     end
   end
 
-  def is_master
-    state = get_es_resource('/_cluster/state?filter_routing_table=true&filter_metadata=true&filter_indices=true')
-    local = get_es_resource('/_cluster/nodes/_local')
-    local['nodes'].keys.first == state['master_node']
-  end
-
-  def get_status
-    health = get_es_resource('/_cluster/health')
-    health['status'].downcase
-  end
-
-  def run
-    if is_master
-      case get_status
-      when 'green'
-        ok "Cluster is green"
-      when 'yellow'
-        warning "Cluster is yellow"
-      when 'red'
-        critical "Cluster is red"
-      end
-    else
-      ok 'Not the master'
+  def get_open_fds
+    stats = get_es_resource('/_nodes/_local/stats?process=true')
+    begin
+      keys = stats['nodes'].keys
+      stats['nodes'][keys[0]]['process']['open_file_descriptors'].to_i
+    rescue NoMethodError
+      warning "Failed to retrieve open_file_descriptors"
     end
   end
 
+  def get_max_fds
+    info = get_es_resource('/_nodes/_local?process=true')
+    begin
+      keys = info['nodes'].keys
+      info['nodes'][keys[0]]['process']['max_file_descriptors'].to_i
+    rescue NoMethodError
+      warning "Failed to retrieve max_file_descriptors"
+    end
+  end
+
+  def run
+    open = get_open_fds
+    max = get_max_fds
+    used_percent = ((open.to_f / max.to_f) * 100).to_i
+
+    if used_percent >= config[:critical]
+      critical "fd usage #{used_percent}% exceeds #{config[:critical]}% (#{open}/#{max})"
+    elsif used_percent >= config[:warning]
+      warning "fd usage #{used_percent}% exceeds #{config[:warning]}% (#{open}/#{max})"
+    else
+      ok "fd usage at #{used_percent}% (#{open}/#{max})"
+    end
+  end
 end
