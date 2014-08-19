@@ -4,7 +4,9 @@
 # ===
 #
 # DESCRIPTION:
-#   This plugin pulls info from mandrill (transactional email) and outputs email delivery statistics for each time period & the user's current reputation and backlog size
+#   This plugin pulls info from mandrill (transactional email) and
+#   outputs email delivery statistics for each time period &
+#   the user's current reputation and backlog size
 #
 # OUTPUT:
 #   graphite
@@ -19,7 +21,6 @@ require 'uri'
 require 'json'
 
 class MandrillInfo < Sensu::Plugin::Metric::CLI::Graphite
-
   option :authToken,
     :short => '-t MANDRILL_AUTH_TOKEN',
     :long => '--auth-token MANDRILL_AUTH_TOKEN',
@@ -49,11 +50,10 @@ class MandrillInfo < Sensu::Plugin::Metric::CLI::Graphite
   end
 
   def output_stats(time_period, stats)
-      output "mandrill.stats.#{time_period}.sent", stats["sent"]
-      output "mandrill.stats.#{time_period}.unsubs", stats["unsubs"]
-      output "mandrill.stats.#{time_period}.rejects", stats["rejects"]
-      output "mandrill.stats.#{time_period}.complaints", stats["complaints"]
-      output "mandrill.stats.#{time_period}.opens", stats["opens"]
+    output "mandrill.stats.#{time_period}.sent", stats["sent"]
+    output "mandrill.stats.#{time_period}.unsubs", stats["unsubs"]
+    output "mandrill.stats.#{time_period}.rejects", stats["rejects"]
+    output "mandrill.stats.#{time_period}.complaints", stats["complaints"]
+    output "mandrill.stats.#{time_period}.opens", stats["opens"]
   end
-
 end
