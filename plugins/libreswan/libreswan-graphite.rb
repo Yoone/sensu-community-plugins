@@ -28,8 +28,9 @@
 #
 #   $ ./libreswan-graphite.rb
 #   host.libreswan.connections 1 1419278260
-#   host.libreswan.outbytes 7699 1419278260
-#   host.libreswan.inbytes 13656 1419278260
+#   host.libreswan.outmb 76.99 1419278260
+#   host.libreswan.inmb 136.56 1419278260
+#   host.libreswan.memusage 600.97 1419278260
 
 require 'rubygems' if RUBY_VERSION < '1.9.0'
 require 'sensu-plugin/metric/cli'
@@ -43,9 +44,23 @@ class LibreswanMetrics < Sensu::Plugin::Metric::CLI::Graphite
         :long => "--scheme SCHEME",
         :default => "#{Socket.gethostname}.libreswan"
 
-    def extract_stats(stat)
+    def toMB(bytes)
+        return bytes / 1048576.0
+    end
+
+    def extractStats(stat)
         bytes = /.*inBytes=(?<inBytes>\d+).*outBytes=(?<outBytes>\d+).*/.match(stat)
-        return bytes[:inBytes].to_i, bytes[:outBytes].to_i
+        return toMB(bytes[:inBytes].to_f),toMB(bytes[:outBytes].to_f)
+    end
+
+    def memUsage
+        pid = `pidof pluto`.strip
+        File.foreach("/proc/#{pid}/status") { |x|
+            if x.start_with?("VmSize")
+                return x.split()[1].to_f / 1024
+            end
+        }
+        return 0
     end
 
     def run
@@ -53,14 +68,15 @@ class LibreswanMetrics < Sensu::Plugin::Metric::CLI::Graphite
         # 006 is RC_INFORMATIONAL_TRAFFIC
         conns = `sudo ipsec whack --trafficstatus`.lines.select { |stat| stat.start_with?("006") }
         connCount = conns.size
-        inBytes = 0
-        outBytes = 0
+        inMB = 0.0
+        outMB = 0.0
         if connCount > 0
-            inBytes, outBytes = conns.map { |stat| extract_stats(stat) }.transpose.map { |x| x.reduce(:+) }
+            inMB, outMB = conns.map { |stat| extractStats(stat) }.transpose.map { |x| x.reduce(:+) }
         end
         output "#{config[:scheme]}.connections", connCount, timestamp
-        output "#{config[:scheme]}.outbytes", outBytes, timestamp
-        output "#{config[:scheme]}.inbytes", inBytes, timestamp
+        output "#{config[:scheme]}.outmb", "%.2f" % outMB, timestamp
+        output "#{config[:scheme]}.inmb", "%.2f" % inMB, timestamp
+        output "#{config[:scheme]}.memusage", "%.2f" % memUsage, timestamp
         ok
     end
 end
