@@ -9,15 +9,16 @@
 # USes lsblk & smartctl
 
 
+# #RED
 # get devices (capture /dev/sd* and /dev/hd*)
-DEVICES=$( lsblk | awk '/^[sh]/ {print $1}' )
+DEVICES=$( lsblk | awk '/ disk *$/ {print $1}' )
 # store fails
 FAILS=()
 
 # loop devices
 for DEVICE in $DEVICES; do
 	# get device status
-	STATUS=$( smartctl -H /dev/$DEVICE | grep PASSED > /dev/null && echo "OK" )
+	STATUS=$( smartctl -H /dev/$DEVICE | grep 'OK\|PASSED' > /dev/null && echo "OK" )
 
 	# push to fails
 	if ! [ "$STATUS" == "OK" ]; then
