@@ -55,11 +55,13 @@ class LibreswanMetrics < Sensu::Plugin::Metric::CLI::Graphite
 
     def memUsage
         pid = `pidof pluto`.strip
-        File.foreach("/proc/#{pid}/status") { |x|
-            if x.start_with?("VmSize")
-                return x.split()[1].to_f / 1024
-            end
-        }
+        unless pid == ""
+            File.foreach("/proc/#{pid}/status") { |x|
+                if x.start_with?("VmSize")
+                    return x.split()[1].to_f / 1024
+                end
+            }
+        end
         return 0
     end
 
